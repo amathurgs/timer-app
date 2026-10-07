@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Timer</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e1e2e;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    color: #f0f0f5;
+  }
+  .card {
+    background: #2a2a3c;
+    border-radius: 16px;
+    padding: 40px 48px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    text-align: center;
+    width: 320px;
+  }
+  h1 {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #9a9ab0;
+    margin: 0 0 20px;
+  }
+  .inputs {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .inputs label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #9a9ab0;
+  }
+  .inputs input {
+    width: 70px;
+    margin-top: 6px;
+    padding: 8px;
+    font-size: 18px;
+    text-align: center;
+    border: 1px solid #44445a;
+    border-radius: 8px;
+    background: #1e1e2e;
+    color: #f0f0f5;
+  }
+  .display {
+    font-size: 56px;
+    font-weight: 600;
+    margin: 10px 0 24px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+  }
+  .display.alarm {
+    color: #ff5d6c;
+    animation: pulse 0.6s infinite alternate;
+  }
+  @keyframes pulse {
+    from { opacity: 1; }
+    to { opacity: 0.4; }
+  }
+  .buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  button {
+    flex: 1;
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+  }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  #startBtn { background: #4caf7d; color: #0a1f14; }
+  #pauseBtn { background: #e8b84b; color: #1f1704; }
+  #stopBtn  { background: #ff5d6c; color: #1f0507; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Timer</h1>
+    <div class="inputs" id="inputs">
+      <label>Min
+        <input type="number" id="minInput" min="0" value="0">
+      </label>
+      <label>Sec
+        <input type="number" id="secInput" min="0" max="59" value="30">
+      </label>
+    </div>
+    <div class="display" id="display">00:30</div>
+    <div class="buttons">
+      <button id="startBtn">Start</button>
+      <button id="pauseBtn" disabled>Pause</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+  </div>
+
+<script>
+const minInput = document.getElementById('minInput');
+const secInput = document.getElementById('secInput');
+const display = document.getElementById('display');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const stopBtn = document.getElementById('stopBtn');
+
+let totalSeconds = 30;
+let remaining = 30;
+let intervalId = null;
+let running = false;
+
+function format(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function updateDisplay() {
+  display.textContent = format(remaining);
+}
+
+function setInputsFromRemaining() {
+  minInput.value = Math.floor(remaining / 60);
+  secInput.value = remaining % 60;
+}
+
+function readInputs() {
+  const m = Math.max(0, parseInt(minInput.value, 10) || 0);
+  const s = Math.max(0, Math.min(59, parseInt(secInput.value, 10) || 0));
+  return m * 60 + s;
+}
+
+function playAlarm() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const beepTimes = [0, 0.3, 0.6];
+  beepTimes.forEach(t => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.22);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(ctx.currentTime + t);
+    osc.stop(ctx.currentTime + t + 0.25);
+  });
+}
+
+function tick() {
+  remaining--;
+  updateDisplay();
+  if (remaining <= 0) {
+    clearInterval(intervalId);
+    intervalId = null;
+    running = false;
+    display.classList.add('alarm');
+    playAlarm();
+    minInput.disabled = false;
+    secInput.disabled = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = false;
+    startBtn.textContent = 'Start';
+  }
+}
+
+startBtn.addEventListener('click', () => {
+  display.classList.remove('alarm');
+  if (!running && remaining <= 0) {
+    totalSeconds = readInputs();
+    remaining = totalSeconds;
+  } else if (!intervalId && remaining > 0 && totalSeconds === 0) {
+    totalSeconds = readInputs();
+    remaining = totalSeconds;
+  }
+  if (remaining <= 0) {
+    totalSeconds = readInputs();
+    remaining = totalSeconds;
+  }
+  if (remaining <= 0) return;
+
+  running = true;
+  minInput.disabled = true;
+  secInput.disabled = true;
+  startBtn.disabled = true;
+  pauseBtn.disabled = false;
+  stopBtn.disabled = false;
+  updateDisplay();
+  intervalId = setInterval(tick, 1000);
+});
+
+pauseBtn.addEventListener('click', () => {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+    startBtn.disabled = false;
+    startBtn.textContent = 'Resume';
+    pauseBtn.disabled = true;
+  }
+});
+
+stopBtn.addEventListener('click', () => {
+  clearInterval(intervalId);
+  intervalId = null;
+  running = false;
+  display.classList.remove('alarm');
+  totalSeconds = readInputs();
+  remaining = totalSeconds;
+  updateDisplay();
+  minInput.disabled = false;
+  secInput.disabled = false;
+  startBtn.disabled = false;
+  startBtn.textContent = 'Start';
+  pauseBtn.disabled = true;
+  stopBtn.disabled = true;
+});
+
+[minInput, secInput].forEach(el => {
+  el.addEventListener('input', () => {
+    if (!running) {
+      remaining = readInputs();
+      updateDisplay();
+    }
+  });
+});
+
+updateDisplay();
+</script>
+</body>
+</html>
